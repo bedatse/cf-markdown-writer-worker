@@ -4,9 +4,9 @@ main = "src/index.ts"
 compatibility_date = "2025-01-09"
 compatibility_flags = ["nodejs_compat"]
 
-vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast" }
-
 observability = { enabled = true }
+
+vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast" }
 
 ai = { binding = "AI" }
 
@@ -24,6 +24,8 @@ r2_buckets = [
 ]
 
 [env.dev]
+vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast" }
+
 ai = { binding = "AI" }
 
 d1_databases = [
@@ -40,6 +42,8 @@ r2_buckets = [
 ]
 
 [env.prod]
+vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast" }
+
 ai = { binding = "AI" }
 
 d1_databases = [
