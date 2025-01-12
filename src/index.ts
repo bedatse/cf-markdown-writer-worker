@@ -60,8 +60,6 @@ export default {
 		}
 
 		// Get the URL and await network idle time from the request
-		// TODO: Change the request to POST with JSON body
-		const url = new URL(request.url);
 		const body: RequestBody = await request.json();
 		const reqUrl = body?.url;
 
@@ -77,6 +75,7 @@ export default {
 		const domain = targetUrl.hostname;
 		const targetUrlString = targetUrl.toString();
 		
+		let docId: string;
 		let r2Key: string;
 		// Get HTML location from D1 PageMetadata
 		try {
@@ -89,6 +88,7 @@ export default {
 				return Response.json({"message": "URL is not in the database", "status": "failed"}, { status: 404 });
 			}
 
+			docId = String(pageMetadata.id);
 			r2Key = String(pageMetadata.r2_path);
 			console.log({ "message": "Fetched URL metadata from PageMetadata", "URL": targetUrlString, "R2Path": r2Key });
 		} catch (e: any) {
@@ -171,11 +171,11 @@ Always start the markdown with the page title as level 1 heading.`},
 
 		// Update the PageMetadata with the markdown creation time
 		try {
-			await env.PAGE_METADATA.prepare("UPDATE PageMetadata SET markdown_created_at = CURRENT_TIMESTAMP WHERE url = ?")
-				.bind(targetUrlString)
+			await env.PAGE_METADATA.prepare("UPDATE PageMetadata SET markdown_created_at = CURRENT_TIMESTAMP WHERE id = ?")
+				.bind(docId)
 				.run();
 		} catch (e: any) {
-			console.log({ "message": "Failed to update PageMetadata", "URL": targetUrlString, "Error": e.message });
+			console.log({ "message": "Failed to update PageMetadata", "id": docId, "Error": e.message });
 			console.error(e);
 		}
 
