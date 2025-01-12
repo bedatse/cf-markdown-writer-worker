@@ -6,36 +6,51 @@ compatibility_flags = ["nodejs_compat"]
 
 vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast" }
 
-# Workers Logs
-# Docs: https://developers.cloudflare.com/workers/observability/logs/workers-logs/
-# Configuration: https://developers.cloudflare.com/workers/observability/logs/workers-logs/#enable-workers-logs
 observability = { enabled = true }
 
-# Bind the Workers AI model catalog. Run machine learning models, powered by serverless GPUs, on Cloudflare’s global network
-# Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#workers-ai
 ai = { binding = "AI" }
 
-# Bind a D1 database. D1 is Cloudflare’s native serverless SQL database.
-# Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#d1-databases
 d1_databases = [
-	{ binding = "PAGE_METADATA", database_name = "web-rag-composer-page-metadata", database_id = "9deb74a3-287b-4d8b-a020-6662cfbd9a01", preview_database_id = "56f92781-5084-4333-a331-9cfdfaa0710f" }
+	{ binding = "PAGE_METADATA", database_name = "web-rag-composer-page-metadata-local", database_id = "4bf05ffe-6461-499b-8e64-a7364d076ab4", preview_database_id = "4bf05ffe-6461-499b-8e64-a7364d076ab4" }
 ]
 
 kv_namespaces = [
-	{ binding = "HTML_PREPROCESS", id = "25972a8b0d584077915809ff56a1cfdb", preview_id = "5ddde3eeac90486eab448aa679dca356" }
+	{ binding = "HTML_PREPROCESS", id = "7f7ecaa70bf546feafe4672b5d451664", preview_id = "7f7ecaa70bf546feafe4672b5d451664" }
 ]
 
-# Bind an R2 Bucket. Use R2 to store arbitrarily large blobs of data, such as files.
-# Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#r2-buckets
 r2_buckets = [
-	{ binding = "RAW_HTML_BUCKET", bucket_name = "web-rag-composer-raw-html", preview_bucket_name = "web-rag-composer-raw-html-dev" },
-	{ binding = "KNOWLEDGE_BUCKET", bucket_name = "web-rag-composer-knowledge", preview_bucket_name = "web-rag-composer-knowledge-dev" }
+	{ binding = "RAW_HTML_BUCKET", bucket_name = "web-rag-composer-raw-html-local", preview_bucket_name = "web-rag-composer-raw-html-local" },
+	{ binding = "KNOWLEDGE_BUCKET", bucket_name = "web-rag-composer-knowledge-local", preview_bucket_name = "web-rag-composer-knowledge-local" }
 ]
 
-# Bind a Vectorize index. Use to store and query vector embeddings for semantic search, classification and other vector search use-cases.
-# Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#vectorize-indexes
-# vectorize = [
-# 	{ binding = "KNOWLEDGE_INDEX", index_name = "web-rag-composer-knowledge-index" },
-# 	{ binding = "KNOWLEDGE_INDEX_PREVIEW", index_name = "web-rag-composer-knowledge-index-dev" }
-# ]
+[env.dev]
+ai = { binding = "AI" }
 
+d1_databases = [
+	{ binding = "PAGE_METADATA", database_name = "web-rag-composer-page-metadata-dev", database_id = "56f92781-5084-4333-a331-9cfdfaa0710f" }
+]
+
+kv_namespaces = [
+	{ binding = "HTML_PREPROCESS", id = "5ddde3eeac90486eab448aa679dca356" }
+]
+
+r2_buckets = [
+	{ binding = "RAW_HTML_BUCKET", bucket_name = "web-rag-composer-raw-html-dev" },
+	{ binding = "KNOWLEDGE_BUCKET", bucket_name = "web-rag-composer-knowledge-dev" }
+]
+
+[env.prod]
+ai = { binding = "AI" }
+
+d1_databases = [
+	{ binding = "PAGE_METADATA", database_name = "web-rag-composer-page-metadata", database_id = "9deb74a3-287b-4d8b-a020-6662cfbd9a01" }
+]
+
+kv_namespaces = [
+	{ binding = "HTML_PREPROCESS", id = "25972a8b0d584077915809ff56a1cfdb" }
+]
+
+r2_buckets = [
+	{ binding = "RAW_HTML_BUCKET", bucket_name = "web-rag-composer-raw-html" },
+	{ binding = "KNOWLEDGE_BUCKET", bucket_name = "web-rag-composer-knowledge" }
+]
