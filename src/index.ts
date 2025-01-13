@@ -8,17 +8,18 @@ export interface Env {
 	HTML_PREPROCESS: KVNamespace;
 	RAW_HTML_BUCKET: R2Bucket;
 	KNOWLEDGE_BUCKET: R2Bucket;
+	CREATE_MARKDOWN_QUEUE: Queue;
 	RETURN_MARKDOWN: string;
 }
 
-interface RequestBody {
+export interface RequestBody {
 	url: string;
 	maxChunkSize: number;
 	maxTokens: number;
 	additionalPrompt: string;
 }
 
-interface PreprocessHTMLRules {
+export interface PreprocessHTMLRules {
 	type: string;
 	selector?: string;
 	exclude?: string;
@@ -30,13 +31,13 @@ const DEFAULT_MAX_TOKENS = 1024;
 /**
  * Get the page metadata from the D1 database
  * @param url - The URL to get the metadata for
- * @param env - The environment variables
+ * @param env - The environment bindings
  * @returns The document ID and the R2 key
  */
 export async function getPageMetadata(url:string, env: Env) {
 	// Get HTML location from D1 PageMetadata
 	try {
-		const pageMetadata = await env.PAGE_METADATA.prepare("SELECT * FROM PageMetadata WHERE url = ?")
+		const pageMetadata = await env.PAGE_METADATA.prepare("SELECT id, r2_path FROM PageMetadata WHERE url = ?")
 			.bind(url)
 			.first();
 
@@ -60,7 +61,7 @@ export async function getPageMetadata(url:string, env: Env) {
 /**
  * Get the HTML from the R2 bucket
  * @param r2Key - The R2 key to get the HTML from
- * @param env - The environment variables
+ * @param env - The environment bindings
  * @returns The HTML
  */
 export async function getHtml(r2Key: string, env: Env) {
@@ -86,7 +87,7 @@ export async function getHtml(r2Key: string, env: Env) {
 /**
  * Get the HTML preprocessing rules from the KV store
  * @param domain - The domain to get the rules for
- * @param env - The environment variables
+ * @param env - The environment bindings
  * @returns The HTML preprocessing rules
  */
 export async function getHtmlPreprocessRules(domain: string, env: Env): Promise<PreprocessHTMLRules[]> {
@@ -250,7 +251,7 @@ export function splitHtml(htmlInput: string, maxChunkSize: number = DEFAULT_MAX_
  * @param title - The title of the page
  * @param additionalPrompt - The additional prompt to add to the markdown
  * @param maxTokens - The maximum number of tokens to generate
- * @param env - The environment variables
+ * @param env - The environment bindings
  * @returns The markdown and the messages
  */
 export async function generateMarkdown(chunks: string[], title: string, additionalPrompt: string, maxTokens: number, env: Env) {
@@ -270,7 +271,7 @@ export async function generateMarkdown(chunks: string[], title: string, addition
 		const response = await env.AI.run(model, {"messages": messages, max_tokens: maxTokens})
 		const markdown = String(response.response);
 
-		console.log({ "message": "Generated markdown", "responseLength": markdown.length });
+		console.log({ "message": "Generated markdown", "responseLength": markdown.length, "markdown": markdown });
 		
 		return { markdown, messages };
 	} catch (e: any) {
@@ -285,7 +286,7 @@ export async function generateMarkdown(chunks: string[], title: string, addition
  * @param docId - The document ID
  * @param r2Key - The R2 key
  * @param markdown - The markdown to store
- * @param env - The environment variables
+ * @param env - The environment bindings
  */
 export async function storeMarkdownAndUpdatePageMetadata(docId: string, r2Key: string, markdown: string, env: Env) {
 	try {
@@ -315,8 +316,67 @@ export async function storeMarkdownAndUpdatePageMetadata(docId: string, r2Key: s
 	}
 }
 
+export async function createMarkdown(body: RequestBody, env: Env) {
+	const reqUrl = body?.url;
+	const maxChunkSize = body?.maxChunkSize || DEFAULT_MAX_CHUNK_SIZE;
+	const maxTokens = body?.maxTokens || DEFAULT_MAX_TOKENS;
+	const additionalPrompt = body?.additionalPrompt || "";
+
+	// Check if the URL is provided
+	if (!reqUrl) {
+		console.log({ "message": "URL parameter is missing", "URL": reqUrl });
+		return {"message": "URL is required", "status": "hardfail", "code": 400};
+	} 
+
+	const targetUrl = new URL(reqUrl);
+	const domain = targetUrl.hostname;
+
+	try {
+		console.log({ "message": "Request URL", "URL": reqUrl, "MaxChunkSize": maxChunkSize, "MaxTokens": maxTokens, "AdditionalPrompt": additionalPrompt });
+		// Get HTML location from D1 PageMetadata
+		const {docId, r2Key} = await getPageMetadata(reqUrl, env);
+
+		if (!docId || !r2Key) {
+			return {"message": "URL is not in the database", "status": "hardfail", "code": 404};
+		}
+
+		// Get HTML from R2
+		const html = await getHtml(r2Key, env);
+		if (!html) {
+			return {"message": "HTML not found from R2", "status": "hardfail", "code": 404};
+		}
+
+		// Get HTML Preprocessing rules from KV
+		const htmlPreprocessRules = await getHtmlPreprocessRules(domain, env) || [];
+
+		const {title, processedHtml} = preprocessHTML(html, htmlPreprocessRules);
+		let chunks: string[] = [];
+
+		// If any of the processed HTML chunks are larger than the max chunk size, redistribute split them
+		if (processedHtml.reduce((acc, curr) => acc || curr.length > maxChunkSize, false)) {
+			chunks = splitHtml(processedHtml.join("\n\n"), maxChunkSize);
+		} else {
+			chunks = processedHtml;
+		}
+
+		// Generate markdown
+		const { markdown, messages } = await generateMarkdown(chunks, title, additionalPrompt, maxTokens, env);
+
+		// Store markdown in Knowledge Bucket
+		await storeMarkdownAndUpdatePageMetadata(docId, r2Key, markdown, env);
+
+		if (env.RETURN_MARKDOWN === "true") {
+			return {"message": "Markdown saved to Knowledge Bucket", "status": "success", "code": 200, details: { markdown, messages }};
+		}
+
+		return {"message": "Markdown saved to Knowledge Bucket", "status": "success", "code": 200};
+	} catch (e: any) {
+		return {"message": e.message, "status": "softfail", "code": 500};
+	}
+}
+
 export default {
-	async fetch(request, env, ctx): Promise<Response> {
+	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		// Check if the request is authorized
 		const apiKey = request.headers.get("Authorization")?.replace("Bearer ", "");
 		if (apiKey !== env.API_TOKEN) {
@@ -325,7 +385,7 @@ export default {
 		}
 
 		// Check if the request is POST
-		if (request.method !== "POST") {
+		if (request.method !== "POST" && request.method !== "PUT") {
 			console.log({ "message": "Invalid request method", "Method": request.method });
 			return Response.json({"message": "Invalid request method", "status": "failed"}, { status: 405 });
 		}
@@ -333,61 +393,55 @@ export default {
 		// Get the parameters from the request
 		const body: RequestBody = await request.json();
 		const reqUrl = body?.url;
-		const maxChunkSize = body?.maxChunkSize || DEFAULT_MAX_CHUNK_SIZE;
-		const maxTokens = body?.maxTokens || DEFAULT_MAX_TOKENS;
-		const additionalPrompt = body?.additionalPrompt || "";
-
 		// Check if the URL is provided
 		if (!reqUrl) {
 			console.log({ "message": "URL parameter is missing", "URL": reqUrl });
-			return Response.json({"message": "URL is required", "status": "failed"}, { status: 400 });
+			return Response.json({"message": "URL parameter is missing", "status": "failed"}, { status: 400 });
 		} 
 
-		const targetUrl = new URL(reqUrl);
-		const domain = targetUrl.hostname;
+		switch (request.method) {
+			case "POST":
+				const result = await createMarkdown(body, env);
 
-		try {
-			console.log({ "message": "Request URL", "URL": reqUrl, "MaxChunkSize": maxChunkSize, "MaxTokens": maxTokens, "AdditionalPrompt": additionalPrompt });
-			// Get HTML location from D1 PageMetadata
-			const {docId, r2Key} = await getPageMetadata(reqUrl, env);
+				if (result.details) {
+					return Response.json({"message": result.message, "status": result.status, "details": result.details}, { status: result.code });
+				}
+				return Response.json({"message": result.message, "status": result.status}, { status: result.code });
+			case "PUT":
+				try {
+					await env.CREATE_MARKDOWN_QUEUE.send(body);
+					return Response.json({"message": "Request Accepted", "status": "success", "request": body}, { status: 202 });
+				} catch (e: any) {
+					console.log({ "message": "Failed to send message to queue", "Error": e.message });
+					console.error(e);
+					return Response.json({"message": "Failed to send message to queue", "status": "failed"}, { status: 500 });
+				}
+		}
+	},
 
-			if (!docId || !r2Key) {
-				return Response.json({"message": "URL is not in the database", "status": "failed"}, { status: 404 });
+	async queue(batch: MessageBatch, env: Env): Promise<void> {
+		console.log({ "message": "Consuming queue", "BatchSize": batch.messages.length });
+
+		for (const message of batch.messages) {
+			console.log({ "message": "Processing message", "Message": message });
+
+			const body: RequestBody = message.body as RequestBody;
+			const result = await createMarkdown(body, env);
+
+			switch (result.status) {
+				case "hardfail":
+					console.log({ "message": "Failed to process request, will not retry", "Result": result });
+					message.ack(); // Do not retry on hardfail
+					break;
+				case "softfail":
+					console.log({ "message": "Failed to process request, will retry", "Result": result });
+					message.retry();
+					break;
+				case "success":
+					console.log({ "message": "Successfully processed request", "Result": result });
+					message.ack();
+					break;
 			}
-
-			// Get HTML from R2
-			const html = await getHtml(r2Key, env);
-			if (!html) {
-				return Response.json({"message": "HTML not found from R2", "status": "failed"}, { status: 404 });
-			}
-
-			// Get HTML Preprocessing rules from KV
-			const htmlPreprocessRules = await getHtmlPreprocessRules(domain, env) || [];
-
-			const {title, processedHtml} = preprocessHTML(html, htmlPreprocessRules);
-			let chunks: string[] = [];
-
-			// If any of the processed HTML chunks are larger than the max chunk size, redistribute split them
-			if (processedHtml.reduce((acc, curr) => acc || curr.length > maxChunkSize, false)) {
-				chunks = splitHtml(processedHtml.join("\n\n"), maxChunkSize);
-			} else {
-				chunks = processedHtml;
-			}
-
-			// Generate markdown
-			const { markdown, messages } = await generateMarkdown(chunks, title, additionalPrompt, maxTokens, env);
-
-			// Store markdown in Knowledge Bucket
-			await storeMarkdownAndUpdatePageMetadata(docId, r2Key, markdown, env);
-
-			if (env.RETURN_MARKDOWN === "true") {
-				return Response.json({"message": "Markdown saved to Knowledge Bucket", "status": "success", "markdown": markdown, "messages": messages}, { status: 200 });
-			}
-
-			return Response.json({"message": "Markdown saved to Knowledge Bucket", "status": "success"}, { status: 200 });
-		} catch (e: any) {
-			return Response.json({"message": e.message, "status": "failed"}, { status: 500 });
 		}
 	},
 } satisfies ExportedHandler<Env>;
-

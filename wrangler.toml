@@ -41,6 +41,14 @@ r2_buckets = [
 	{ binding = "KNOWLEDGE_BUCKET", bucket_name = "web-rag-composer-knowledge-dev" }
 ]
 
+queues.consumers = [
+	{ queue = "create-markdown-dev", max_concurrency = 1, max_batch_size = 5, dead_letter_queue = "create-markdown-dlq-dev" }
+]
+
+queues.producers = [
+	{ binding = "CREATE_MARKDOWN_QUEUE", queue = "create-markdown-dev"}
+]
+
 [env.prod]
 vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast", RETURN_MARKDOWN = "false" }
 
@@ -57,4 +65,12 @@ kv_namespaces = [
 r2_buckets = [
 	{ binding = "RAW_HTML_BUCKET", bucket_name = "web-rag-composer-raw-html" },
 	{ binding = "KNOWLEDGE_BUCKET", bucket_name = "web-rag-composer-knowledge" }
+]
+
+queues.consumers = [
+	{ queue = "create-markdown-prod", max_concurrency = 5, max_batch_size = 10, dead_letter_queue = "create-markdown-dlq-prod"  }
+]
+
+queues.producers = [
+	{ binding = "CREATE_MARKDOWN_QUEUE", queue = "create-markdown-prod"}
 ]
