@@ -24,7 +24,7 @@ r2_buckets = [
 ]
 
 [env.dev]
-vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast" }
+vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast", RETURN_MARKDOWN = "true" }
 
 ai = { binding = "AI" }
 
@@ -42,7 +42,7 @@ r2_buckets = [
 ]
 
 [env.prod]
-vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast" }
+vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast", RETURN_MARKDOWN = "false" }
 
 ai = { binding = "AI" }
 
