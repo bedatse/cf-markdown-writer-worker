@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 
 observability = { enabled = true }
 
-vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast" }
+vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast", GOOGLE_AI_MODEL = "gemini-2.0-flash-exp" }
 
 ai = { binding = "AI" }
 
@@ -20,11 +20,12 @@ kv_namespaces = [
 
 r2_buckets = [
 	{ binding = "RAW_HTML_BUCKET", bucket_name = "web-rag-composer-raw-html-local", preview_bucket_name = "web-rag-composer-raw-html-local" },
+	{ binding = "SCREENSHOT_BUCKET", bucket_name = "web-rag-composer-screenshot-local", preview_bucket_name = "web-rag-composer-screenshot-local" },
 	{ binding = "KNOWLEDGE_BUCKET", bucket_name = "web-rag-composer-knowledge-local", preview_bucket_name = "web-rag-composer-knowledge-local" }
 ]
 
 [env.dev]
-vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast", RETURN_MARKDOWN = "true" }
+vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast", RETURN_MARKDOWN = "true", GOOGLE_AI_MODEL = "gemini-2.0-flash-exp"  }
 
 ai = { binding = "AI" }
 
@@ -38,6 +39,7 @@ kv_namespaces = [
 
 r2_buckets = [
 	{ binding = "RAW_HTML_BUCKET", bucket_name = "web-rag-composer-raw-html-dev" },
+	{ binding = "SCREENSHOT_BUCKET", bucket_name = "web-rag-composer-screenshot-dev" },
 	{ binding = "KNOWLEDGE_BUCKET", bucket_name = "web-rag-composer-knowledge-dev" }
 ]
 
@@ -50,7 +52,7 @@ queues.producers = [
 ]
 
 [env.prod]
-vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast", RETURN_MARKDOWN = "false" }
+vars = { AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast", RETURN_MARKDOWN = "false", GOOGLE_AI_MODEL = "gemini-2.0-flash-exp"  }
 
 ai = { binding = "AI" }
 
@@ -64,6 +66,7 @@ kv_namespaces = [
 
 r2_buckets = [
 	{ binding = "RAW_HTML_BUCKET", bucket_name = "web-rag-composer-raw-html" },
+	{ binding = "SCREENSHOT_BUCKET", bucket_name = "web-rag-composer-screenshot" },
 	{ binding = "KNOWLEDGE_BUCKET", bucket_name = "web-rag-composer-knowledge" }
 ]
 
